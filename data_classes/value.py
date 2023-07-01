@@ -3,22 +3,31 @@ import numpy as np
 
 class Value:
     def __init__(self, data, _children=(), _op="", label=""):
-        self.data = data
+        self.data = np.array(data)
         self.grad = 0
         self._backward = lambda: None
         self._prev = set(_children)
         self._op = _op
         self.label = label
+        self._index = 0
 
     def __iter__(self):
-        return iter(self)
+        return self
+    
+    def __next__(self):
+        if self._index < len(self.data):
+            item = Value(self.data[self._index])
+            self._index += 1
+            return item
+        else:
+            raise StopIteration
 
     def __repr__(self):
-        return f"Value(data={self.data})"
+        return f"Value(data={self.data},op={self._op})"
 
     def __add__(self, other):
         other = other if isinstance(other, Value) else Value(other, label=f"{other}")
-        out = Value(self.data + other.data, (self, other), "+")
+        out = Value(np.array(self.data) + np.array(other.data), (self, other), "+")
 
         def _backward():
             # chain rule
@@ -64,17 +73,21 @@ class Value:
         return self + (-other)
 
     def __radd__(self, other):  # other + self
-        out = Value(self.data + other.data, (self, other), "sum_r")
-        return out
+        return self+other
 
     def log(self):
         x = self.data
         out = Value(np.log(x), (self,), "log")
+
+        def _backward():
+            self.grad += 1/x * out.grad
+
+        out._backward = _backward
         return out
 
     def exp(self):
         x = self.data
-        out = Value(np.exp(x), _children=(self,), label="exp")
+        out = Value(np.exp(x), _children=(self,), _op="exp")
 
         def _backward():
             self.grad += out.data * out.grad
@@ -97,6 +110,8 @@ class Value:
         x = self.data
         t = np.exp(x) / sum(np.exp(m) for m in x)
         out = Value(t, (self,), "softmax")
+        print("AAAAAAAAAA")
+
 
         def _backward():
             gradient_whole = 0
